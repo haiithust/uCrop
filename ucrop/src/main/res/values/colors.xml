@@ -7,6 +7,8 @@
     <color name="ucrop_color_ebony_clay">#20242F</color>
     <color name="ucrop_color_heather">#B3BECE</color>
     <color name="ucrop_color_white">#FFF</color>
+    <color name="ucrop_color_container_warning">#66FFFFFF</color>
+    <color name="ucrop_color_warning_text">#FFFFFF</color>
 
     <!--uCrop Activity-->
     <color name="ucrop_color_toolbar">@color/ucrop_color_white</color>

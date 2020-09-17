@@ -8,9 +8,17 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Region;
 import android.os.Build;
+import android.text.TextPaint;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+
+import androidx.annotation.ColorInt;
+import androidx.annotation.IntDef;
+import androidx.annotation.IntRange;
+import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 
 import com.yalantis.ucrop.R;
 import com.yalantis.ucrop.callback.OverlayViewChangeListener;
@@ -18,11 +26,6 @@ import com.yalantis.ucrop.util.RectUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-
-import androidx.annotation.ColorInt;
-import androidx.annotation.IntDef;
-import androidx.annotation.IntRange;
-import androidx.annotation.NonNull;
 
 /**
  * Created by Oleksii Shliama (https://github.com/shliama).
@@ -38,6 +41,7 @@ public class OverlayView extends View {
 
     public static final boolean DEFAULT_SHOW_CROP_FRAME = true;
     public static final boolean DEFAULT_SHOW_CROP_GRID = true;
+    public static final boolean DEFAULT_SHOW_CROP_CORNER = false;
     public static final boolean DEFAULT_CIRCLE_DIMMED_LAYER = false;
     public static final int DEFAULT_FREESTYLE_CROP_MODE = FREESTYLE_CROP_MODE_DISABLE;
     public static final int DEFAULT_CROP_GRID_ROW_COUNT = 2;
@@ -53,7 +57,7 @@ public class OverlayView extends View {
     private int mCropGridRowCount, mCropGridColumnCount;
     private float mTargetAspectRatio;
     private float[] mGridPoints = null;
-    private boolean mShowCropFrame, mShowCropGrid;
+    private boolean mShowCropFrame, mShowCropGrid, mShowCropCorner;
     private boolean mCircleDimmedLayer;
     private int mDimmedColor;
     private Path mCircularPath = new Path();
@@ -61,6 +65,8 @@ public class OverlayView extends View {
     private Paint mCropGridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint mCropFramePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint mCropFrameCornersPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private Paint mWarningContainerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private Paint mTextPaint = new TextPaint();
     @FreestyleMode
     private int mFreestyleCropMode = DEFAULT_FREESTYLE_CROP_MODE;
     private float mPreviousTouchX = -1, mPreviousTouchY = -1;
@@ -68,6 +74,9 @@ public class OverlayView extends View {
     private int mTouchPointThreshold;
     private int mCropRectMinSize;
     private int mCropRectCornerTouchAreaLineLength;
+    private int mWarningContainerHeight;
+    private String mTextOnTop;
+    private String mTextOnBottom;
 
     private OverlayViewChangeListener mCallback;
 
@@ -77,6 +86,11 @@ public class OverlayView extends View {
         mTouchPointThreshold = getResources().getDimensionPixelSize(R.dimen.ucrop_default_crop_rect_corner_touch_threshold);
         mCropRectMinSize = getResources().getDimensionPixelSize(R.dimen.ucrop_default_crop_rect_min_size);
         mCropRectCornerTouchAreaLineLength = getResources().getDimensionPixelSize(R.dimen.ucrop_default_crop_rect_corner_touch_area_line_length);
+        mWarningContainerHeight = getResources().getDimensionPixelSize(R.dimen.ucrop_size_wrapper_rotate_button);
+        mWarningContainerPaint.setColor(ContextCompat.getColor(getContext(), R.color.ucrop_color_container_warning));
+        mTextPaint.setTextSize(getResources().getDimension(R.dimen.ucrop_text_size));
+        mTextPaint.setColor(ContextCompat.getColor(getContext(), R.color.ucrop_color_warning_text));
+        mTextPaint.setTextAlign(Paint.Align.CENTER);
     }
 
     public OverlayView(Context context) {
@@ -129,6 +143,10 @@ public class OverlayView extends View {
     public void setFreestyleCropMode(@FreestyleMode int mFreestyleCropMode) {
         this.mFreestyleCropMode = mFreestyleCropMode;
         postInvalidate();
+    }
+
+    public void setShowCropCorner(boolean show) {
+        mShowCropCorner = show;
     }
 
     /**
@@ -260,6 +278,14 @@ public class OverlayView extends View {
         mCircularPath.reset();
         mCircularPath.addCircle(mCropViewRect.centerX(), mCropViewRect.centerY(),
                 Math.min(mCropViewRect.width(), mCropViewRect.height()) / 2.f, Path.Direction.CW);
+    }
+
+    public void setTextOnTop(String value) {
+        mTextOnTop = value;
+    }
+
+    public void setTextOnBottom(String value) {
+        mTextOnBottom = value;
     }
 
     protected void init() {
@@ -499,7 +525,7 @@ public class OverlayView extends View {
             canvas.drawRect(mCropViewRect, mCropFramePaint);
         }
 
-        if (mFreestyleCropMode != FREESTYLE_CROP_MODE_DISABLE) {
+        if (mFreestyleCropMode != FREESTYLE_CROP_MODE_DISABLE || mShowCropCorner) {
             canvas.save();
 
             mTempRect.set(mCropViewRect);
@@ -514,6 +540,35 @@ public class OverlayView extends View {
 
             canvas.restore();
         }
+
+        if (!TextUtils.isEmpty(mTextOnTop)) {
+            drawWarningText(canvas, true);
+        }
+
+        if (!TextUtils.isEmpty(mTextOnBottom)) {
+            drawWarningText(canvas, false);
+        }
+    }
+
+    protected void drawWarningText(@NonNull Canvas canvas, boolean isOnTop) {
+        mTempRect.set(mCropViewRect);
+        if (isOnTop) {
+            mTempRect.bottom = mTempRect.top + mWarningContainerHeight;
+            canvas.drawText(
+                    mTextOnTop, mTempRect.left + mTempRect.width() / 2,
+                    mTempRect.top + mTempRect.height() / 2 - (mTextPaint.descent() + mTextPaint.ascent()) / 2,
+                    mTextPaint
+            );
+        } else {
+            mTempRect.top = mTempRect.bottom - mWarningContainerHeight;
+            canvas.drawText(
+                    mTextOnBottom, mTempRect.left + mTempRect.width() / 2,
+                    mTempRect.top + mTempRect.height() / 2 - (mTextPaint.descent() + mTextPaint.ascent()) / 2,
+                    mTextPaint
+            );
+        }
+
+        canvas.drawRect(mTempRect, mWarningContainerPaint);
     }
 
     /**
